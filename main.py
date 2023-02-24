@@ -4,90 +4,60 @@ import matplotlib.pyplot as plt
 from keras import layers
 from keras.regularizers import l1
 from tensorflow.keras.datasets import fashion_mnist
-
-# Load data
-(x_train, _), (x_test, _) = fashion_mnist.load_data()
-
-# Preprocess data
-x_train = x_train.astype('float32') / 255.
-x_test = x_test.astype('float32') / 255.
-x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
-x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
 # This is the number of hidden nodes
 encoding_dim = 64  # 64 floats -> compression of factor 12.25, assuming the input is 784 floats
-
 # Load the Fashion MNIST dataset
 (x_train, _), (x_test, _) = keras.datasets.fashion_mnist.load_data()
-
-# Normalize the pixel values
+# Normalize pixel values between 0 and 1
 x_train = x_train.astype('float32') / 255.
 x_test = x_test.astype('float32') / 255.
-
-# Flatten the images
-x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
-x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
-
+# Reshape the images to a flat vector of size 784 (28x28)
+x_train = x_train.reshape((len(x_train), 784))
+x_test = x_test.reshape((len(x_test), 784))
 # This is our input image
 input_img = keras.Input(shape=(784,))
-
 # "encoded" is the encoded representation of the input
-encoded = layers.Dense(encoding_dim, activation='relu', activity_regularizer=l1(10e-5))(input_img)
-
+encoded1 = layers.Dense(128, activation='relu')(input_img)
+encoded2 = layers.Dense(64, activation='relu')(encoded1)
+encoded3 = layers.Dense(32, activation='relu')(encoded2)
+# This model maps an input to its encoded representation
+encoder = keras.Model(input_img, encoded3)
 # "decoded" is the lossy reconstruction of the input
-decoded = layers.Dense(784, activation='sigmoid')(encoded)
-
+decoded1 = layers.Dense(64, activation='relu')(encoded3)
+decoded2 = layers.Dense(128, activation='relu')(decoded1)
+decoded = layers.Dense(784, activation='sigmoid')(decoded2)
 # This model maps an input to its reconstruction
 autoencoder = keras.Model(input_img, decoded)
-
-# This model maps an input to its encoded representation
-encoder = keras.Model(input_img, encoded)
-
-# This is our encoded (64-dimensional) input
-encoded_input = keras.Input(shape=(encoding_dim,))
-
-# Retrieve the last layer of the autoencoder model
-decoder_layer = autoencoder.layers[-1]
-
-# Create the decoder model
-decoder = keras.Model(encoded_input, decoder_layer(encoded_input))
-
-# Compile the model
 autoencoder.compile(optimizer='adam', loss='binary_crossentropy')
-
-# Train the model
 autoencoder.fit(x_train, x_train,
                 epochs=100,
                 batch_size=256,
                 shuffle=True,
                 validation_data=(x_test, x_test))
-
-# Encode and decode some images from the test set
+# Encode and decode some images
 encoded_imgs = encoder.predict(x_test)
-decoded_imgs = decoder.predict(encoded_imgs)
-
-# Display the original images, reconstructed images, and encoded representations
-n = 10  # How many images to display
-plt.figure(figsize=(20, 6))
+decoded_imgs = autoencoder.predict(x_test)
+# Use Matplotlib (don't ask)
+import matplotlib.pyplot as plt
+n = 10  # How many images we will display
+plt.figure(figsize=(20, 4))
 for i in range(n):
-    # Display the original image
+    # Display original image
     ax = plt.subplot(3, n, i + 1)
     plt.imshow(x_test[i].reshape(28, 28))
     plt.gray()
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
-
-    # Display the reconstructed image
+    # Display reconstructed image
     ax = plt.subplot(3, n, i + 1 + n)
     plt.imshow(decoded_imgs[i].reshape(28, 28))
     plt.gray()
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
-
-    # Display the encoded representation
-    ax = plt.subplot(3, n, i + 1 + n*2)
-    plt.imshow(encoded_imgs[i].reshape(8,8))
+    # Display encoded representation
+    ax = plt.subplot(3, n, i + 1 + 2*n)
+    plt.imshow(encoded_imgs[i].reshape(4, 8))
     plt.gray()
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
-
 plt.show()
