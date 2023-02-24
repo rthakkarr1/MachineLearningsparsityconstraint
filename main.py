@@ -1,27 +1,37 @@
 import keras
-from keras import layers
-from keras.regularizers import l1
-from keras.datasets import fashion_mnist
 import numpy as np
 import matplotlib.pyplot as plt
+from keras import layers
+from keras.regularizers import l1
+from tensorflow.keras.datasets import fashion_mnist
 
-# This is the number of hidden nodes
-encoding_dim = 64  # 64 floats -> compression of factor 12.25, assuming the input is 784 floats
-
-# Load the Fashion MNIST dataset
+# Load data
 (x_train, _), (x_test, _) = fashion_mnist.load_data()
 
-# Normalize and flatten the data
+# Preprocess data
 x_train = x_train.astype('float32') / 255.
 x_test = x_test.astype('float32') / 255.
 x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
 x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
+# This is the number of hidden nodes
+encoding_dim = 64  # 64 floats -> compression of factor 12.25, assuming the input is 784 floats
 
-# This is our input image (784-dimensional)
+# Load the Fashion MNIST dataset
+(x_train, _), (x_test, _) = keras.datasets.fashion_mnist.load_data()
+
+# Normalize the pixel values
+x_train = x_train.astype('float32') / 255.
+x_test = x_test.astype('float32') / 255.
+
+# Flatten the images
+x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
+x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
+
+# This is our input image
 input_img = keras.Input(shape=(784,))
 
 # "encoded" is the encoded representation of the input
-encoded = layers.Dense(encoding_dim, activation='relu')(input_img)
+encoded = layers.Dense(encoding_dim, activation='relu', activity_regularizer=l1(10e-5))(input_img)
 
 # "decoded" is the lossy reconstruction of the input
 decoded = layers.Dense(784, activation='sigmoid')(encoded)
@@ -55,29 +65,27 @@ autoencoder.fit(x_train, x_train,
 encoded_imgs = encoder.predict(x_test)
 decoded_imgs = decoder.predict(encoded_imgs)
 
-# Plot the original images, reconstructed images, and encoded representations
+# Display the original images, reconstructed images, and encoded representations
 n = 10  # How many images to display
-
 plt.figure(figsize=(20, 6))
-
 for i in range(n):
-    # Display original image
+    # Display the original image
     ax = plt.subplot(3, n, i + 1)
     plt.imshow(x_test[i].reshape(28, 28))
     plt.gray()
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
 
-    # Display encoded representation
+    # Display the reconstructed image
     ax = plt.subplot(3, n, i + 1 + n)
-    plt.imshow(encoded_imgs[i].reshape(8, 8))
+    plt.imshow(decoded_imgs[i].reshape(28, 28))
     plt.gray()
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
 
-    # Display reconstructed image
-    ax = plt.subplot(3, n, i + 1 + n * 2)
-    plt.imshow(decoded_imgs[i].reshape(28, 28))
+    # Display the encoded representation
+    ax = plt.subplot(3, n, i + 1 + n*2)
+    plt.imshow(encoded_imgs[i].reshape(8,8))
     plt.gray()
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
