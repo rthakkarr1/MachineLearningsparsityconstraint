@@ -1,73 +1,85 @@
+import keras
+from keras import layers
+from keras.regularizers import l1
+from keras.datasets import fashion_mnist
 import numpy as np
 import matplotlib.pyplot as plt
-from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras.datasets import fashion_mnist
 
-# Load the Fashion-MNIST dataset
+# This is the number of hidden nodes
+encoding_dim = 64  # 64 floats -> compression of factor 12.25, assuming the input is 784 floats
+
+# Load the Fashion MNIST dataset
 (x_train, _), (x_test, _) = fashion_mnist.load_data()
 
-# Normalize the input data to range between 0 and 1
-x_train = x_train.astype("float32") / 255.0
-x_test = x_test.astype("float32") / 255.0
+# Normalize and flatten the data
+x_train = x_train.astype('float32') / 255.
+x_test = x_test.astype('float32') / 255.
+x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
+x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
 
-# Define the encoder model
-input_shape = (28, 28)
-hidden_size = 64
+# This is our input image (784-dimensional)
+input_img = keras.Input(shape=(784,))
 
-encoder_input = keras.Input(shape=input_shape, name="input")
-flatten_layer = layers.Flatten()(encoder_input)
-hidden_layer = layers.Dense(hidden_size, activation="relu", activity_regularizer=keras.regularizers.l1(10e-5))(flatten_layer)
-encoder_output = layers.Dense(hidden_size, activation="sigmoid")(hidden_layer)
+# "encoded" is the encoded representation of the input
+encoded = layers.Dense(encoding_dim, activation='relu')(input_img)
 
-encoder_model = keras.Model(encoder_input, encoder_output, name="encoder")
+# "decoded" is the lossy reconstruction of the input
+decoded = layers.Dense(784, activation='sigmoid')(encoded)
 
-# Define the decoder model
-decoder_input = keras.Input(shape=hidden_size, name="encoded")
-hidden_layer_2 = layers.Dense(hidden_size, activation="relu")(decoder_input)
-flatten_layer_2 = layers.Dense(28 * 28, activation="sigmoid")(hidden_layer_2)
-decoder_output = layers.Reshape(input_shape)(flatten_layer_2)
+# This model maps an input to its reconstruction
+autoencoder = keras.Model(input_img, decoded)
 
-decoder_model = keras.Model(decoder_input, decoder_output, name="decoder")
+# This model maps an input to its encoded representation
+encoder = keras.Model(input_img, encoded)
 
-# Define the autoencoder model
-autoencoder_input = keras.Input(shape=input_shape, name="input")
-encoded = encoder_model(autoencoder_input)
-decoded = decoder_model(encoded)
-autoencoder = keras.Model(autoencoder_input, decoded, name="autoencoder")
+# This is our encoded (64-dimensional) input
+encoded_input = keras.Input(shape=(encoding_dim,))
 
-# Compile the autoencoder model
-autoencoder.compile(optimizer="adam", loss="binary_crossentropy")
+# Retrieve the last layer of the autoencoder model
+decoder_layer = autoencoder.layers[-1]
 
-# Train the autoencoder model
-autoencoder.fit(x_train, x_train, epochs=20, batch_size=128, shuffle=True, validation_data=(x_test, x_test))
+# Create the decoder model
+decoder = keras.Model(encoded_input, decoder_layer(encoded_input))
 
-# Use the trained encoder and decoder models to generate encoded representations and reconstructed images
-encoded_imgs = encoder_model.predict(x_test)
-decoded_imgs = decoder_model.predict(encoded_imgs)
+# Compile the model
+autoencoder.compile(optimizer='adam', loss='binary_crossentropy')
 
-# Plot some example images and their corresponding reconstructed images and encoded representations
-n = 10  # Number of images to visualize
-plt.figure(figsize=(20, 4))
+# Train the model
+autoencoder.fit(x_train, x_train,
+                epochs=100,
+                batch_size=256,
+                shuffle=True,
+                validation_data=(x_test, x_test))
+
+# Encode and decode some images from the test set
+encoded_imgs = encoder.predict(x_test)
+decoded_imgs = decoder.predict(encoded_imgs)
+
+# Plot the original images, reconstructed images, and encoded representations
+n = 10  # How many images to display
+
+plt.figure(figsize=(20, 6))
+
 for i in range(n):
-    # Original image
+    # Display original image
     ax = plt.subplot(3, n, i + 1)
-    plt.imshow(x_test[i])
+    plt.imshow(x_test[i].reshape(28, 28))
     plt.gray()
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
 
-    # Encoded representation
-    ax = plt.subplot(3, n, i + n + 1)
-    plt.imshow(encoded_imgs[i].reshape((8, 8)))
+    # Display encoded representation
+    ax = plt.subplot(3, n, i + 1 + n)
+    plt.imshow(encoded_imgs[i].reshape(8, 8))
     plt.gray()
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
 
-    # Reconstructed image
-    ax = plt.subplot(3, n, i + 2 * n + 1)
-    plt.imshow(decoded_imgs[i])
+    # Display reconstructed image
+    ax = plt.subplot(3, n, i + 1 + n * 2)
+    plt.imshow(decoded_imgs[i].reshape(28, 28))
     plt.gray()
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
+
 plt.show()
